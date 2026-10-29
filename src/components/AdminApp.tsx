@@ -291,7 +291,7 @@ export function AdminApp() {
             <span>Today</span>
             <Calendar className="w-4 h-4 text-[#B8B8BC]" />
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-serif text-[#F5F2EC]">
+          <div className="text-3xl sm:text-4xl font-light font-inter text-[#F5F2EC]">
             {todayCount}
           </div>
           <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Scheduled sessions</span>
@@ -303,7 +303,7 @@ export function AdminApp() {
             <span>Upcoming</span>
             <Clock className="w-4 h-4 text-sky-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-serif text-sky-300">
+          <div className="text-3xl sm:text-4xl font-light font-inter text-sky-300">
             {upcomingCount}
           </div>
           <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Booked sessions</span>
@@ -315,7 +315,7 @@ export function AdminApp() {
             <span>Needs confirmation</span>
             <AlertTriangle className="w-4 h-4 text-[#F59E0B]" />
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-serif text-[#F59E0B]">
+          <div className="text-3xl sm:text-4xl font-light font-inter text-[#F59E0B]">
             {needsConfirmationCount}
           </div>
           <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Pending replies</span>
@@ -327,7 +327,7 @@ export function AdminApp() {
             <span>No-show rate</span>
             <Users className="w-4 h-4 text-rose-400" />
           </div>
-          <div className="text-2xl sm:text-3xl font-bold font-serif text-rose-300">
+          <div className="text-3xl sm:text-4xl font-light font-inter text-rose-300">
             {noShowRate}%
           </div>
           <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Past sessions</span>
