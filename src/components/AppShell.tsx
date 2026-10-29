@@ -287,8 +287,17 @@ export function AppShell() {
         style={{ backgroundColor: `${SIDEBAR}F2`, borderBottom: `1px solid ${BORDER}` }}
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#1E3D2C", border: `1px solid #2B5040` }}>
-            <span className="font-serif font-bold text-xs" style={{ color: ONLINE }}>N</span>
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: "#1E3D2C", border: `1px solid #2B5040` }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2" /><path d="M12 20v2" />
+              <path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" />
+              <path d="M2 12h2" /><path d="M20 12h2" />
+              <path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" />
+            </svg>
           </div>
           <div>
             <span className="font-serif text-base font-bold" style={{ color: TEXT1 }}>Nourish</span>

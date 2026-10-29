@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from "react";
 import { useRole } from "@/context/RoleContext";
 import { Appointment, getNow, getTodayStr } from "@/lib/data";
-import { format } from "date-fns";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SunMascot } from "@/components/SunMascot";
 import { StatusDropdown } from "@/components/admin/StatusDropdown";
@@ -251,15 +250,9 @@ export function AdminApp() {
       {/* 1. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <span className="text-xs font-semibold text-[#F4694C] uppercase tracking-wider">
-            Practice Management • Lead Nutritionist
-          </span>
-          <h1 className="font-serif text-3xl lg:text-4xl font-normal text-[#F5F2EC] mt-1">
+          <h1 className="font-serif text-3xl lg:text-4xl font-normal text-[#F5F2EC]">
             Good morning, <em className="italic font-normal">Dr. Kayro</em>
           </h1>
-          <p className="text-sm text-[#B8B8BC] mt-1">
-            {format(getNow(), "EEEE, d MMM yyyy")} • {upcomingCount} consultation{upcomingCount !== 1 ? "s" : ""} scheduled
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5">
