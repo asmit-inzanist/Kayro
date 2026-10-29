@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
+@theme {
+  /* ── Exact Brand Palette ── */
+  --color-canvas:         #1C1C1E;   /* Page canvas / main bg */
+  --color-sidebar:        #141416;   /* Left navigation drawer */
+  --color-surface:        #2A2A2C;   /* Cards, right panels */
+  --color-card-border:    #3A3A3C;   /* Card outlines, dividers */
+  --color-coral:          #F4694C;   /* Primary CTA accent */
+  --color-coral-hover:    #E05538;
+  --color-hero-green:     #365744;   /* Hero "next session" card */
+  --color-teal-card:      #3D5F5F;
+  --color-off-white:      #F5F2EC;   /* Primary text */
+  --color-soft-grey:      #B8B8BC;   /* Secondary text */
+  --color-online:         #34D399;   /* Online status dot */
+  --color-amber-alert:    #F59E0B;   /* Unconfirmed / amber warning */
+  --color-emerald-done:   #2E9E68;
+  --color-rose-error:     #D64545;
+
+  --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-sans:  var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+  --font-admin: var(--font-inter), system-ui, -apple-system, sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #1C1C1E;
+  --foreground: #F5F2EC;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: #1C1C1E;
+  color: #F5F2EC;
+  font-family: var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-serif {
+  font-family: var(--font-fraunces), Georgia, serif;
+}
+
+.font-sans {
+  font-family: var(--font-plus-jakarta), system-ui, -apple-system, sans-serif;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1C1C1E;
+}
+::-webkit-scrollbar-thumb {
+  background: #3A3A3C;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4A4A4E;
 }
