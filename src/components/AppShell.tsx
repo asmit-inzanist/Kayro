@@ -337,86 +337,63 @@ export function AppShell() {
           MAIN CONTENT AREA
       ═══════════════════════════════════════════════════════════ */}
       <main
-        className="lg:ml-[240px] flex-1 min-h-screen px-4 sm:px-6 lg:px-10 pt-3.5 lg:pt-4 pb-24 lg:pb-12 overflow-x-hidden"
+        className={cn(
+          "lg:ml-[240px] flex-1 min-h-screen px-4 sm:px-6 lg:px-10 pt-3.5 lg:pt-4 overflow-x-hidden",
+          role === "client" ? "pb-24 lg:pb-12" : "pb-8 lg:pb-12"
+        )}
         style={{ backgroundColor: CANVAS }}
       >
         {role === "client" ? <ClientApp /> : <AdminApp />}
       </main>
 
       {/* ═══════════════════════════════════════════════════════════
-          MOBILE BOTTOM TAB BAR (< lg)
+          MOBILE BOTTOM TAB BAR (< lg) - Only for client portal
       ═══════════════════════════════════════════════════════════ */}
-      <nav
-        className="lg:hidden fixed bottom-4 left-4 right-4 z-40 p-2 shadow-2xl flex items-center justify-around rounded-full backdrop-blur-xl border border-[#3A3A3C]"
-        style={{ backgroundColor: "#18181AE8" }}
-      >
-        {role === "client" ? (
-          <>
-            {[
-              { screen: "home",         label: "Home",     Icon: Home },
-              { screen: "book",         label: "Book",     Icon: Calendar },
-              { screen: "appointments", label: "Sessions", Icon: User },
-            ].map(({ screen, label, Icon }) => {
-              const active = clientScreen === screen || (screen === "appointments" && clientScreen === "reschedule");
+      {role === "client" && (
+        <nav
+          className="lg:hidden fixed bottom-4 left-4 right-4 z-40 p-2 shadow-2xl flex items-center justify-around rounded-full backdrop-blur-xl border border-[#3A3A3C]"
+          style={{ backgroundColor: "#18181AE8" }}
+        >
+          {[
+            { screen: "home",         label: "Home",     Icon: Home },
+            { screen: "book",         label: "Book",     Icon: Calendar },
+            { screen: "appointments", label: "Sessions", Icon: User },
+          ].map(({ screen, label, Icon }) => {
+            const active = clientScreen === screen || (screen === "appointments" && clientScreen === "reschedule");
 
-              if (screen === "book" && active) {
-                return (
-                  <button
-                    key={screen}
-                    type="button"
-                    onClick={() => setClientScreen("book")}
-                    className="flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer py-1"
-                  >
-                    <div className="w-11 h-11 rounded-full bg-[#F4694C] shadow-lg shadow-[#F4694C]/45 flex items-center justify-center text-white -mt-2">
-                      <Calendar className="w-5 h-5" />
-                    </div>
-                    <span className="text-[10px] font-semibold text-[#F4694C]">{label}</span>
-                  </button>
-                );
-              }
-
+            if (screen === "book" && active) {
               return (
                 <button
                   key={screen}
                   type="button"
-                  onClick={() => setClientScreen(screen as Parameters<typeof setClientScreen>[0])}
-                  className="flex-1 py-1.5 flex flex-col items-center justify-center gap-1 transition-colors text-xs font-medium cursor-pointer"
-                  style={{
-                    color: active ? CORAL : "#6E6E73",
-                  }}
+                  onClick={() => setClientScreen("book")}
+                  className="flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer py-1"
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-[10px]">{label}</span>
+                  <div className="w-11 h-11 rounded-full bg-[#F4694C] shadow-lg shadow-[#F4694C]/45 flex items-center justify-center text-white -mt-2">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] font-semibold text-[#F4694C]">{label}</span>
                 </button>
               );
-            })}
-          </>
-        ) : (
-          <>
-            {[
-              { filter: "all",      label: "Schedule", Icon: LayoutDashboard },
-              { filter: "today",    label: "Today",    Icon: CalendarDays },
-              { filter: "upcoming", label: "Upcoming", Icon: Clock },
-            ].map(({ filter, label, Icon }) => {
-              const active = adminFilter === filter;
-              return (
-                <button
-                  key={filter}
-                  onClick={() => setAdminFilter(filter as Parameters<typeof setAdminFilter>[0])}
-                  className="flex-1 py-2 rounded-full flex flex-col items-center justify-center gap-1 transition-colors text-xs font-medium"
-                  style={{
-                    backgroundColor: active ? CORAL : "transparent",
-                    color: active ? "#fff" : TEXT2,
-                  }}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-[10px]">{label}</span>
-                </button>
-              );
-            })}
-          </>
-        )}
-      </nav>
+            }
+
+            return (
+              <button
+                key={screen}
+                type="button"
+                onClick={() => setClientScreen(screen as Parameters<typeof setClientScreen>[0])}
+                className="flex-1 py-1.5 flex flex-col items-center justify-center gap-1 transition-colors text-xs font-medium cursor-pointer"
+                style={{
+                  color: active ? CORAL : "#6E6E73",
+                }}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px]">{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 }
