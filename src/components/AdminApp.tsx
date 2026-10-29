@@ -803,17 +803,6 @@ export function AdminApp() {
         </div>
       </div>
 
-      {/* Floating Action Button on Mobile */}
-      <div className="md:hidden fixed bottom-6 right-5 z-20">
-        <Button
-          onClick={() => setAddSheetOpen(true)}
-          variant="coral"
-          className="rounded-full w-13 h-13 shadow-xl flex items-center justify-center p-0"
-        >
-          <Plus className="w-6 h-6" />
-        </Button>
-      </div>
-
       {/* WhatsApp Reminder Modal */}
       <WhatsAppReminderDialog
         appointment={selectedWhatsAppApt}
