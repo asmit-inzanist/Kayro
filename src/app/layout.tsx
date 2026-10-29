@@ -26,7 +26,10 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Nourish • Clinical Nutrition Consultation",
-  description: "Personalized clinical nutrition and metabolic health care with Dr. Anika Mehta.",
+  description: "Personalized clinical nutrition and metabolic health care with Dr. Kayro.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

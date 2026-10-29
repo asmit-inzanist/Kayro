@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRole } from "@/context/RoleContext";
 import {
   Sheet,
@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/DatePicker";
 import { TimeSlotPicker } from "@/components/TimeSlotPicker";
-import { Calendar, User, Phone, Tag, Clock, AlertCircle } from "lucide-react";
-import { DEMO_TOMORROW_STR, getSlotsForDate } from "@/lib/data";
+import { Calendar, User, Phone, Clock, AlertCircle } from "lucide-react";
+import { getSlotsForDate, getTomorrowStr, normalizePhoneDigits } from "@/lib/data";
 import { formatTimeLabel } from "@/lib/utils";
 
 interface AddAppointmentSheetProps {
@@ -33,25 +33,46 @@ export function AddAppointmentSheet({
 
   const [clientName, setClientName] = useState("");
   const [phone, setPhone] = useState("");
-  const [selectedDate, setSelectedDate] = useState<string>(DEMO_TOMORROW_STR);
+  const [selectedDate, setSelectedDate] = useState<string>(getTomorrowStr());
   const [selectedTime, setSelectedTime] = useState<string>("10:00");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [slots, setSlots] = useState<{ time: string; available: boolean }[]>([]);
 
-  // Derive slots dynamically from store
-  const slots = getSlotsForDate(selectedDate);
-
-  const handleSave = () => {
-    if (!clientName.trim()) {
-      setErrorMessage("Please enter a client name.");
-      return;
+  // Reset form when sheet opens
+  useEffect(() => {
+    if (open) {
+      setClientName("");
+      setPhone("");
+      setSelectedDate(getTomorrowStr());
+      setSelectedTime("10:00");
+      setErrorMessage(null);
     }
+  }, [open]);
+
+  // Load slots dynamically from Supabase
+  const loadSlots = async () => {
+    const data = await getSlotsForDate(selectedDate);
+    setSlots(data);
+  };
+
+  useEffect(() => {
+    if (open) {
+      loadSlots();
+    }
+  }, [selectedDate, open]);
+
+  const phoneDigits = normalizePhoneDigits(phone);
+  const isFormValid = clientName.trim().length > 0 && phoneDigits.length === 10;
+
+  const handleSave = async () => {
+    if (!isFormValid || isSaving) return;
     setErrorMessage(null);
     setIsSaving(true);
 
-    const result = addAppointmentByAdmin({
+    const result = await addAppointmentByAdmin({
       clientName: clientName.trim(),
-      phone: phone.trim(),
+      phone: phoneDigits,
       date: selectedDate,
       time: selectedTime,
     });
@@ -61,6 +82,7 @@ export function AddAppointmentSheet({
     if (!result.ok) {
       if (result.reason === "slot_taken") {
         setErrorMessage("That slot was just taken, please pick another.");
+        await loadSlots();
       } else {
         setErrorMessage("Could not schedule appointment. Please pick another slot.");
       }
@@ -68,7 +90,6 @@ export function AddAppointmentSheet({
     }
 
     onOpenChange(false);
-    // Reset form
     setClientName("");
     setPhone("");
     setErrorMessage(null);
@@ -85,7 +106,7 @@ export function AddAppointmentSheet({
             Add <em className="italic text-[#F4694C]">Appointment</em>
           </SheetTitle>
           <SheetDescription className="text-xs text-[#B8B8BC]">
-            Schedule a new patient consultation in Dr. Anika Mehta&apos;s calendar.
+            Schedule a new patient consultation in Dr. Kayro&apos;s calendar.
           </SheetDescription>
         </SheetHeader>
 
@@ -110,6 +131,7 @@ export function AddAppointmentSheet({
                 if (errorMessage) setErrorMessage(null);
               }}
               placeholder="e.g. Radhika Apte"
+              className="bg-[#1C1C1E] border-[#3A3A3C] text-sm text-[#F5F2EC]"
               required
             />
           </div>
@@ -118,19 +140,27 @@ export function AddAppointmentSheet({
           <div>
             <label className="text-xs font-semibold text-[#B8B8BC] mb-1.5 flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-[#34D399]" />
-              WhatsApp Phone Number (+91)
+              WhatsApp Phone Number (+91) *
             </label>
             <div className="relative">
-              <span className="absolute left-3.5 top-3 text-sm text-[#B8B8BC]">
+              <span className="absolute left-3.5 top-2.5 text-sm text-[#B8B8BC]">
                 +91
               </span>
               <Input
-                className="pl-12 font-mono"
+                className="pl-12 bg-[#1C1C1E] border-[#3A3A3C] text-sm text-[#F5F2EC] tabular-nums"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 placeholder="98200 XXXXX"
               />
             </div>
+            {phone.trim() !== "" && phoneDigits.length !== 10 && (
+              <p className="text-[11px] text-amber-400 mt-1">
+                Enter 10-digit mobile number
+              </p>
+            )}
           </div>
 
           {/* Date Picker */}
@@ -183,9 +213,9 @@ export function AddAppointmentSheet({
           </Button>
           <Button
             onClick={handleSave}
-            disabled={!clientName.trim() || isSaving}
+            disabled={!isFormValid || isSaving}
             variant="coral"
-            className="rounded-full text-xs shadow-md shadow-[#F4694C]/25"
+            className="rounded-full text-xs disabled:opacity-40"
           >
             {isSaving ? "Saving..." : "Save Appointment"}
           </Button>

@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DEMO_TODAY_STR } from "@/lib/data";
+import { getNow, getTodayStr } from "@/lib/data";
 
 interface DatePickerProps {
   selectedDate: string; // "YYYY-MM-DD"
@@ -23,11 +23,16 @@ export function DatePicker({
   onSelectDate,
   className,
 }: DatePickerProps) {
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonthIndex, setCurrentMonthIndex] = useState(9); // 9 = October (0-indexed)
+  const now = getNow();
+  const [currentYear, setCurrentYear] = useState(now.getFullYear());
+  const [currentMonthIndex, setCurrentMonthIndex] = useState(now.getMonth());
+
+  const isCurrentMonthOrEarlier =
+    currentYear < now.getFullYear() ||
+    (currentYear === now.getFullYear() && currentMonthIndex <= now.getMonth());
 
   const handlePrevMonth = () => {
-    if (currentMonthIndex === 9 && currentYear === 2026) return;
+    if (isCurrentMonthOrEarlier) return;
     if (currentMonthIndex === 0) {
       setCurrentMonthIndex(11);
       setCurrentYear(currentYear - 1);
@@ -37,7 +42,6 @@ export function DatePicker({
   };
 
   const handleNextMonth = () => {
-    if (currentMonthIndex === 10 && currentYear === 2026) return;
     if (currentMonthIndex === 11) {
       setCurrentMonthIndex(0);
       setCurrentYear(currentYear + 1);
@@ -51,15 +55,16 @@ export function DatePicker({
   const startDayOffset = (firstDayRaw + 6) % 7;
 
   const monthName = MONTH_NAMES[currentMonthIndex];
+  const todayStr = getTodayStr();
 
   const isPastDay = (day: number) => {
     const formatted = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return formatted < DEMO_TODAY_STR;
+    return formatted < todayStr;
   };
 
   const isToday = (day: number) => {
     const formatted = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return formatted === DEMO_TODAY_STR;
+    return formatted === todayStr;
   };
 
   return (
@@ -81,7 +86,7 @@ export function DatePicker({
           <button
             type="button"
             onClick={handlePrevMonth}
-            disabled={currentMonthIndex === 9 && currentYear === 2026}
+            disabled={isCurrentMonthOrEarlier}
             className="p-2 rounded-full hover:bg-[#3A3A3C] text-[#B8B8BC] hover:text-[#F5F2EC] disabled:opacity-30 disabled:pointer-events-none transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -89,7 +94,6 @@ export function DatePicker({
           <button
             type="button"
             onClick={handleNextMonth}
-            disabled={currentMonthIndex === 10 && currentYear === 2026}
             className="p-2 rounded-full hover:bg-[#3A3A3C] text-[#B8B8BC] hover:text-[#F5F2EC] disabled:opacity-30 disabled:pointer-events-none transition-colors"
           >
             <ChevronRight className="w-4 h-4" />
@@ -99,48 +103,44 @@ export function DatePicker({
 
       {/* Weekday Labels */}
       <div className="grid grid-cols-7 gap-1 text-center mb-2">
-        {WEEKDAYS.map((day) => (
-          <span key={day} className="text-[11px] font-semibold text-[#B8B8BC] uppercase tracking-wider py-1">
-            {day}
+        {WEEKDAYS.map((w) => (
+          <span key={w} className="text-[11px] font-semibold text-[#B8B8BC]">
+            {w}
           </span>
         ))}
       </div>
 
       {/* Days Grid */}
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {/* Leading empty slots */}
         {Array.from({ length: startDayOffset }).map((_, i) => (
-          <div key={`empty-${i}`} className="h-10 w-full" />
+          <div key={`empty-${i}`} className="h-9" />
         ))}
 
+        {/* Month days */}
         {Array.from({ length: daysInMonth }).map((_, i) => {
-          const dayNum = i + 1;
-          const formattedString = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-          
-          const past = isPastDay(dayNum);
-          const today = isToday(dayNum);
-          const isSelected = selectedDate === formattedString;
+          const day = i + 1;
+          const formatted = `${currentYear}-${String(currentMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const isSelected = selectedDate === formatted;
+          const disabled = isPastDay(day);
+          const today = isToday(day);
 
           return (
             <button
-              key={dayNum}
+              key={day}
               type="button"
-              disabled={past}
-              onClick={() => onSelectDate(formattedString)}
+              disabled={disabled}
+              onClick={() => onSelectDate(formatted)}
               className={cn(
-                "h-10 w-full rounded-xl text-sm font-medium flex flex-col items-center justify-center relative transition-all duration-150",
-                past
-                  ? "text-[#B8B8BC]/30 cursor-not-allowed"
-                  : isSelected
-                  ? "bg-[#F4694C] text-[#F5F2EC] font-semibold shadow-md shadow-[#F4694C]/30 scale-[1.05]"
-                  : today
-                  ? "bg-[#3A3A3C] text-[#F59E0B] border border-[#F59E0B]/50 hover:bg-[#3E3E42]"
-                  : "text-[#F5F2EC] hover:bg-[#3A3A3C] hover:border-[#F4694C]/40 border border-transparent"
+                "h-9 w-9 rounded-full mx-auto flex items-center justify-center text-xs font-medium transition-all relative",
+                disabled && "text-[#B8B8BC]/30 cursor-not-allowed",
+                !disabled && !isSelected && "hover:bg-[#3A3A3C] text-[#F5F2EC]",
+                today && !isSelected && "border border-[#F4694C] text-[#F4694C]",
+                isSelected &&
+                  "bg-[#F4694C] text-[#F5F2EC] shadow-md shadow-[#F4694C]/30 font-semibold"
               )}
             >
-              <span>{dayNum}</span>
-              {today && (
-                <span className="w-1 h-1 rounded-full bg-[#F59E0B] absolute bottom-1.5" />
-              )}
+              {day}
             </button>
           );
         })}

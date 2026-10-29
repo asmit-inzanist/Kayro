@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, addDays } from "date-fns";
-import { Appointment, DEMO_NOW, DEMO_TODAY_STR } from "./data";
+import { Appointment, getNow, getTodayStr, getTomorrowStr } from "./data";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -63,7 +63,8 @@ export function formatTimeLabel(timeStr: string): string {
   try {
     const parts = timeStr.split(":").map(Number);
     if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      const d = new Date(2026, 9, 28, parts[0], parts[1]);
+      const now = getNow();
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), parts[0], parts[1]);
       return format(d, "h:mm a");
     }
     return timeStr;
@@ -89,7 +90,8 @@ export function formatEndTime(timeStr: string, durationMinutes = 45): string {
       if (timeStr.toUpperCase().includes("PM") && h < 12) h += 12;
       if (timeStr.toUpperCase().includes("AM") && h === 12) h = 0;
     }
-    const d = new Date(2026, 9, 28, h, m + durationMinutes);
+    const now = getNow();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m + durationMinutes);
     return format(d, "h:mm a");
   } catch (e) {
     return "";
@@ -115,26 +117,42 @@ export function getAppointmentDateTime(appointment: Appointment): Date {
 }
 
 /**
- * Determines whether an appointment is within 24 hours of DEMO_NOW.
- * DEMO_NOW = 2026-10-28 11:00 IST.
- * e.g. an appointment on 2026-10-29 10:00 is 23h ahead -> true.
+ * Determines whether an appointment is within 24 hours of getNow().
+ * Fires for an unconfirmed upcoming appointment whose date is today (time still ahead) or tomorrow.
  */
 export function isWithin24h(appointment: Appointment): boolean {
   if (appointment.clientAction !== "none") return false;
+  if (appointment.status !== "Booked") return false;
+  if (appointment.confirmed) return false;
+
+  const now = getNow();
   const aptDate = getAppointmentDateTime(appointment);
-  const diffMs = aptDate.getTime() - DEMO_NOW.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
-  return diffHours > 0 && diffHours <= 24;
+  if (aptDate.getTime() <= now.getTime()) return false;
+
+  const todayStr = getTodayStr();
+  const tomorrowStr = getTomorrowStr();
+
+  return appointment.date === todayStr || appointment.date === tomorrowStr;
 }
 
 /**
- * Checks if appointment is upcoming relative to DEMO_NOW.
+ * Checks if appointment is upcoming relative to getNow().
+ * "Upcoming" = status Booked, client_action "none", and date+time after getNow().
  */
 export function isUpcoming(appointment: Appointment): boolean {
   if (appointment.clientAction !== "none") return false;
   if (appointment.status !== "Booked") return false;
   const aptDate = getAppointmentDateTime(appointment);
-  return aptDate.getTime() >= DEMO_NOW.getTime();
+  return aptDate.getTime() > getNow().getTime();
+}
+
+/**
+ * Checks if appointment is past relative to getNow().
+ * Defined as: aptDate <= getNow()
+ */
+export function isPastAppointment(appointment: Appointment): boolean {
+  const aptDate = getAppointmentDateTime(appointment);
+  return aptDate.getTime() <= getNow().getTime();
 }
 
 /**
@@ -144,32 +162,45 @@ export function whatsappLink(appointment: Appointment): string {
   const phone = normalizePhone(appointment.phone);
   if (!phone) return "#";
   const clientFirstName = appointment.clientName.split(" ")[0] || "there";
-  const dateStr = formatDateLabel(appointment.date);
+  const now = getNow();
+  const tomorrowStr = getTomorrowStr();
+  const todayStr = getTodayStr();
+  const isTomorrow = appointment.date === tomorrowStr;
+  const isToday = appointment.date === todayStr;
+  const dateRef = isTomorrow
+    ? `tomorrow, ${formatDateLabel(appointment.date)}`
+    : isToday
+    ? `today, ${formatDateLabel(appointment.date)}`
+    : `on ${formatDateLabel(appointment.date)}`;
   const timeStr = formatTimeLabel(appointment.time);
-  const messageBody = `Hi ${clientFirstName}, your session with Dr. Anika is tomorrow, ${dateStr} at ${timeStr}. Reply YES to confirm or tell us if you need to reschedule.`;
+  const messageBody = `Hi ${clientFirstName}, your session with Dr. Kayro is ${dateRef} at ${timeStr}. Reply YES to confirm or tell us if you need to reschedule.`;
   return `https://wa.me/91${phone}?text=${encodeURIComponent(messageBody)}`;
 }
 
 /**
- * Generates 14 consecutive bookable dates starting from DEMO_NOW date.
+ * Generates 14 consecutive bookable dates starting from today.
  */
 export function getBookableDays(count = 14): {
   dateStr: string; // "YYYY-MM-DD"
   dayName: string; // "WED"
   dayNum: number; // 28
-  fullDate: string; // "Wednesday, 28 Oct 2026"
+  fullDate: string; // e.g. "Wednesday, 28 Oct"
   isToday: boolean;
+  isSunday: boolean;
 }[] {
   const days: ReturnType<typeof getBookableDays> = [];
+  const now = getNow();
+  const todayStr = getTodayStr();
   for (let i = 0; i < count; i++) {
-    const d = addDays(DEMO_NOW, i);
+    const d = addDays(now, i);
     const dateStr = format(d, "yyyy-MM-dd");
     days.push({
       dateStr,
       dayName: format(d, "EEE").toUpperCase(),
       dayNum: parseInt(format(d, "d"), 10),
       fullDate: format(d, "EEEE, d MMM yyyy"),
-      isToday: dateStr === DEMO_TODAY_STR,
+      isToday: dateStr === todayStr,
+      isSunday: d.getDay() === 0,
     });
   }
   return days;

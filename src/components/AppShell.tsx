@@ -13,10 +13,15 @@ import {
   CalendarDays,
   User,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { DEMO_TODAY_STR } from "@/lib/data";
+import { cn, formatPhone, isPastAppointment } from "@/lib/utils";
+import { getTodayStr } from "@/lib/data";
+import {
+  ClientSwitcherPopover,
+  ClientSwitcherSheet,
+} from "@/components/ClientSwitcher";
 
 export function AppShell() {
+  const [mobileSwitcherOpen, setMobileSwitcherOpen] = useState(false);
   const {
     role,
     setRole,
@@ -26,6 +31,8 @@ export function AppShell() {
     setAdminFilter,
     appointments,
     upcomingClientAppointments,
+    deviceIdentity,
+    resetDemoData,
   } = useRole();
 
   // ── Exact brand tokens ──────────────────────────────────────────────────
@@ -55,7 +62,7 @@ export function AppShell() {
               className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
               style={{ backgroundColor: "#1E3D2C", border: `1px solid #2B5040` }}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="#34D399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
                 <circle cx="12" cy="12" r="4" />
                 <path d="M12 2v2" /><path d="M12 20v2" />
                 <path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" />
@@ -129,7 +136,7 @@ export function AppShell() {
                     label: "Today's Schedule",
                     Icon: CalendarDays,
                     badge: appointments.filter(
-                      (a) => a.date === DEMO_TODAY_STR && a.clientAction === "none"
+                      (a) => a.date === getTodayStr() && a.status === "Booked" && a.clientAction === "none" && !isPastAppointment(a)
                     ).length,
                   },
                   {
@@ -137,7 +144,7 @@ export function AppShell() {
                     label: "Upcoming Queue",
                     Icon: Clock,
                     badge: appointments.filter(
-                      (a) => a.status === "Booked" && a.clientAction === "none"
+                      (a) => a.status === "Booked" && a.clientAction === "none" && !isPastAppointment(a)
                     ).length,
                   },
                 ].map(({ filter, label, Icon, badge }) => {
@@ -175,53 +182,100 @@ export function AppShell() {
 
         {/* ── Profile / Role Switcher ── */}
         <div className="mt-auto pt-5" style={{ borderTop: `1px solid ${BORDER}` }}>
-          <button
-            type="button"
-            onClick={() => setRole(role === "client" ? "admin" : "client")}
-            className="w-full flex items-center gap-3 p-2.5 rounded-2xl transition-colors cursor-pointer"
-            style={{ backgroundColor: SURFACE, border: `1px solid ${BORDER}` }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = CORAL)}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = BORDER)}
-          >
-            {/* Avatar */}
-            <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0" style={{ border: `1.5px solid ${BORDER}` }}>
-              {role === "client" ? (
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&h=120&q=80"
-                  alt="Riya Shah"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: "#365744" }}>
-                  AM
+          {role === "client" ? (
+            <ClientSwitcherPopover>
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 p-2.5 rounded-2xl transition-colors cursor-pointer"
+                style={{ backgroundColor: SURFACE, border: `1px solid ${BORDER}` }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = CORAL)}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = BORDER)}
+              >
+                {/* Avatar */}
+                <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0" style={{ border: `1.5px solid ${BORDER}` }}>
+                  {deviceIdentity.name === "Riya Shah" ? (
+                    <div className="w-full h-full bg-[#7C3AED] flex items-center justify-center p-1">
+                      <img
+                        src="/people_17742292.png"
+                        alt={deviceIdentity.name}
+                        className="w-full h-full object-contain brightness-0 invert"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white bg-[#F4694C]">
+                      {deviceIdentity.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+                    </div>
+                  )}
+                  {/* Online dot */}
+                  <span
+                    className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#141416]"
+                    style={{ backgroundColor: ONLINE }}
+                  />
                 </div>
-              )}
-              {/* Online dot */}
-              <span
-                className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#141416]"
-                style={{ backgroundColor: ONLINE }}
-              />
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-              <span className="text-sm font-semibold truncate block" style={{ color: TEXT1 }}>
-                {role === "client" ? "Riya Shah" : "Dr. Anika Mehta"}
-              </span>
-              <span className="text-[10px] truncate block" style={{ color: TEXT2 }}>
-                {role === "client" ? "Client" : "Practice Owner"}
-              </span>
-            </div>
-          </button>
+                <div className="flex-1 min-w-0 text-left">
+                  <span className="text-sm font-semibold truncate block" style={{ color: TEXT1 }}>
+                    {deviceIdentity.name}
+                  </span>
+                  <span className="text-[10px] truncate block" style={{ color: TEXT2 }}>
+                    {formatPhone(deviceIdentity.phone)}
+                  </span>
+                </div>
+              </button>
+            </ClientSwitcherPopover>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setRole("client")}
+              className="w-full flex items-center gap-3 p-2.5 rounded-2xl transition-colors cursor-pointer"
+              style={{ backgroundColor: SURFACE, border: `1px solid ${BORDER}` }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = CORAL)}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = BORDER)}
+            >
+              {/* Avatar */}
+              <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0" style={{ border: `1.5px solid ${BORDER}` }}>
+                <div className="w-full h-full flex items-center justify-center text-white" style={{ backgroundColor: "#365744" }}>
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                {/* Online dot */}
+                <span
+                  className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#141416]"
+                  style={{ backgroundColor: ONLINE }}
+                />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <span className="text-sm font-semibold truncate block" style={{ color: TEXT1 }}>
+                  Dr. Kayro
+                </span>
+                <span className="text-[10px] truncate block" style={{ color: TEXT2 }}>
+                  Practice Owner
+                </span>
+              </div>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setRole(role === "client" ? "admin" : "client")}
-            className="w-full text-center text-[11px] transition-colors cursor-pointer mt-2 block"
-            style={{ color: TEXT2 }}
-            onMouseEnter={e => (e.currentTarget.style.color = TEXT1)}
-            onMouseLeave={e => (e.currentTarget.style.color = TEXT2)}
-          >
-            {role === "client" ? "Not you? Switch account" : "Switch to Client view"}
-          </button>
+          {role === "client" ? (
+            <button
+              type="button"
+              onClick={() => resetDemoData()}
+              className="w-full text-center text-[11px] transition-colors cursor-pointer mt-2 block"
+              style={{ color: TEXT2 }}
+              onMouseEnter={e => (e.currentTarget.style.color = TEXT1)}
+              onMouseLeave={e => (e.currentTarget.style.color = TEXT2)}
+            >
+              Reset demo
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setRole("client")}
+              className="w-full text-center text-[11px] transition-colors cursor-pointer mt-2 block"
+              style={{ color: TEXT2 }}
+              onMouseEnter={e => (e.currentTarget.style.color = TEXT1)}
+              onMouseLeave={e => (e.currentTarget.style.color = TEXT2)}
+            >
+              Switch to Client view
+            </button>
+          )}
         </div>
       </aside>
 
@@ -246,23 +300,35 @@ export function AppShell() {
 
         {/* Mobile role switch pill */}
         <button
-          onClick={() => setRole(role === "client" ? "admin" : "client")}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+          onClick={() => {
+            if (role === "client") {
+              setMobileSwitcherOpen(true);
+            } else {
+              setRole("client");
+            }
+          }}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer"
           style={{ backgroundColor: SURFACE, border: `1px solid ${BORDER}`, color: TEXT1 }}
         >
           <div className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white" style={{ backgroundColor: CORAL }}>
-            {role === "client" ? "R" : "A"}
+            {role === "client" ? (deviceIdentity.name[0] || "R") : "K"}
           </div>
-          <span>{role === "client" ? "Dr. Anika" : "Riya"}</span>
+          <span>{role === "client" ? (deviceIdentity.name.split(" ")[0] || "Client") : "Dr. Kayro"}</span>
           <ArrowRightLeft className="w-3 h-3" style={{ color: TEXT2 }} />
         </button>
       </header>
+
+      {/* Mobile Client Switcher Sheet */}
+      <ClientSwitcherSheet
+        open={mobileSwitcherOpen}
+        onOpenChange={setMobileSwitcherOpen}
+      />
 
       {/* ═══════════════════════════════════════════════════════════
           MAIN CONTENT AREA
       ═══════════════════════════════════════════════════════════ */}
       <main
-        className="lg:ml-[240px] flex-1 min-h-screen p-5 sm:p-7 lg:px-10 lg:py-8 pb-24 lg:pb-12 overflow-x-hidden"
+        className="lg:ml-[240px] flex-1 min-h-screen px-4 sm:px-6 lg:px-10 pt-3.5 lg:pt-4 pb-24 lg:pb-12 overflow-x-hidden"
         style={{ backgroundColor: CANVAS }}
       >
         {role === "client" ? <ClientApp /> : <AdminApp />}

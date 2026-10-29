@@ -2,12 +2,14 @@
 
 import React, { useState, useMemo } from "react";
 import { useRole } from "@/context/RoleContext";
-import { Appointment, DEMO_TODAY_STR } from "@/lib/data";
+import { Appointment, getNow, getTodayStr } from "@/lib/data";
+import { format } from "date-fns";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SunMascot } from "@/components/SunMascot";
 import { StatusDropdown } from "@/components/admin/StatusDropdown";
 import { AddAppointmentSheet } from "@/components/admin/AddAppointmentSheet";
 import { WhatsAppReminderDialog } from "@/components/admin/WhatsAppReminderDialog";
+import { EditAppointmentDialog } from "@/components/admin/EditAppointmentDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,6 +32,7 @@ import {
   ChevronDown,
   Trash2,
   RotateCcw,
+  Pencil,
 } from "lucide-react";
 import {
   cn,
@@ -37,14 +40,20 @@ import {
   formatTimeLabel,
   formatPhone,
   isWithin24h,
+  isPastAppointment,
+  getAppointmentDateTime,
   normalizePhone,
 } from "@/lib/utils";
 
 export function AdminApp() {
   const {
     appointments,
+    loading,
+    error,
+    refetch,
     updateAppointmentStatus,
-    cancelAppointment,
+    confirmAppointment,
+    deleteAppointment,
     adminFilter,
     setAdminFilter,
     resetDemoData,
@@ -55,99 +64,201 @@ export function AdminApp() {
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [selectedWhatsAppApt, setSelectedWhatsAppApt] = useState<Appointment | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedEditApt, setSelectedEditApt] = useState<Appointment | null>(null);
 
-  // Active appointments list (excluding cancelled/rescheduled rows)
-  const activeAppointments = useMemo(() => {
-    return appointments.filter((apt) => apt.clientAction === "none");
+  // 1. SORTED APPOINTMENTS
+  // Rule: Unconfirmed Booked within 24h first -> Upcoming Booked by date/time -> Past newest first
+  const sortedAppointments = useMemo(() => {
+    const urgent: Appointment[] = [];
+    const upcoming: Appointment[] = [];
+    const past: Appointment[] = [];
+
+    appointments.forEach((apt) => {
+      const isPast =
+        apt.status === "Done" ||
+        apt.status === "No-show" ||
+        apt.clientAction === "Cancelled" ||
+        apt.clientAction === "Rescheduled" ||
+        (apt.status === "Booked" && isPastAppointment(apt));
+
+      if (isPast) {
+        past.push(apt);
+      } else if (apt.status === "Booked" && apt.clientAction === "none" && !apt.confirmed && isWithin24h(apt)) {
+        urgent.push(apt);
+      } else {
+        upcoming.push(apt);
+      }
+    });
+
+    // Urgent: date/time ascending
+    urgent.sort((a, b) => getAppointmentDateTime(a).getTime() - getAppointmentDateTime(b).getTime());
+
+    // Upcoming: date/time ascending
+    upcoming.sort((a, b) => getAppointmentDateTime(a).getTime() - getAppointmentDateTime(b).getTime());
+
+    // Past: newest first (date/time descending)
+    past.sort((a, b) => getAppointmentDateTime(b).getTime() - getAppointmentDateTime(a).getTime());
+
+    return [...urgent, ...upcoming, ...past];
   }, [appointments]);
 
-  // Unconfirmed session in next 24h
-  const unconfirmedNext24h = useMemo(() => {
-    return activeAppointments.find(
-      (apt) => apt.status === "Booked" && !apt.confirmed && isWithin24h(apt)
-    );
-  }, [activeAppointments]);
-
-  // Dynamic Metrics for Summary Strip
+  // 2. METRICS (Computed from the same single source of truth)
   const todayCount = useMemo(() => {
-    return activeAppointments.filter((apt) => apt.date === DEMO_TODAY_STR).length;
-  }, [activeAppointments]);
+    const todayStr = getTodayStr();
+    return appointments.filter(
+      (apt) => apt.date === todayStr && apt.status === "Booked" && apt.clientAction === "none" && !isPastAppointment(apt)
+    ).length;
+  }, [appointments]);
 
   const upcomingCount = useMemo(() => {
-    return activeAppointments.filter((apt) => apt.status === "Booked").length;
-  }, [activeAppointments]);
+    return appointments.filter(
+      (apt) => apt.status === "Booked" && apt.clientAction === "none" && !isPastAppointment(apt)
+    ).length;
+  }, [appointments]);
 
   const needsConfirmationCount = useMemo(() => {
-    return activeAppointments.filter(
-      (apt) => apt.status === "Booked" && !apt.confirmed
+    return appointments.filter(
+      (apt) =>
+        apt.status === "Booked" &&
+        apt.clientAction === "none" &&
+        !apt.confirmed &&
+        !isPastAppointment(apt)
     ).length;
-  }, [activeAppointments]);
+  }, [appointments]);
 
-  const pastAppointments = useMemo(() => {
-    return activeAppointments.filter(
-      (apt) => apt.status === "Done" || apt.status === "No-show"
+  const pastCount = useMemo(() => {
+    return appointments.filter(
+      (apt) =>
+        apt.status === "Done" ||
+        apt.status === "No-show" ||
+        apt.clientAction === "Cancelled" ||
+        apt.clientAction === "Rescheduled" ||
+        (apt.status === "Booked" && isPastAppointment(apt))
+    ).length;
+  }, [appointments]);
+
+  const noShowRate = useMemo(() => {
+    const doneCount = appointments.filter((apt) => apt.status === "Done").length;
+    const noShowCount = appointments.filter((apt) => apt.status === "No-show").length;
+    const total = doneCount + noShowCount;
+    return total > 0 ? Math.round((noShowCount / total) * 100) : 0;
+  }, [appointments]);
+
+  // Unconfirmed upcoming within 24 hours of getNow()
+  const unconfirmedNext24hList = useMemo(() => {
+    return appointments.filter(
+      (apt) =>
+        apt.status === "Booked" &&
+        apt.clientAction === "none" &&
+        !apt.confirmed &&
+        isWithin24h(apt)
     );
-  }, [activeAppointments]);
+  }, [appointments]);
 
-  const noShowCount = useMemo(() => {
-    return pastAppointments.filter((apt) => apt.status === "No-show").length;
-  }, [pastAppointments]);
-
-  const noShowRate =
-    pastAppointments.length > 0
-      ? Math.round((noShowCount / pastAppointments.length) * 100)
-      : 0;
-
-  // Filtered appointments list
+  // 3. FILTERED APPOINTMENTS
   const filteredAppointments = useMemo(() => {
-    return activeAppointments.filter((apt) => {
+    return sortedAppointments.filter((apt) => {
       // 1. Tab filter
-      if (adminFilter === "today" && apt.date !== DEMO_TODAY_STR) {
-        return false;
-      }
-      if (adminFilter === "upcoming" && apt.status !== "Booked") {
-        return false;
-      }
-      if (adminFilter === "past" && apt.status === "Booked") {
-        return false;
+      if (adminFilter === "today") {
+        const todayStr = getTodayStr();
+        if (apt.date !== todayStr || apt.status !== "Booked" || apt.clientAction !== "none" || isPastAppointment(apt)) {
+          return false;
+        }
+      } else if (adminFilter === "upcoming") {
+        if (apt.status !== "Booked" || apt.clientAction !== "none" || isPastAppointment(apt)) {
+          return false;
+        }
+      } else if (adminFilter === "past") {
+        const isPast =
+          apt.status === "Done" ||
+          apt.status === "No-show" ||
+          apt.clientAction === "Cancelled" ||
+          apt.clientAction === "Rescheduled" ||
+          (apt.status === "Booked" && isPastAppointment(apt));
+        if (!isPast) return false;
       }
 
       // 2. Status dropdown filter
-      if (statusFilter !== "all" && apt.status.toLowerCase() !== statusFilter.toLowerCase()) {
-        return false;
+      if (statusFilter !== "all") {
+        if (statusFilter === "Cancelled") {
+          if (apt.clientAction !== "Cancelled") return false;
+        } else if (statusFilter === "Rescheduled") {
+          if (apt.clientAction !== "Rescheduled") return false;
+        } else if (apt.status !== statusFilter) {
+          return false;
+        }
       }
 
       // 3. Search query
       if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
+        const query = searchQuery.trim().toLowerCase();
+        const normQuery = normalizePhone(query);
         const matchName = apt.clientName.toLowerCase().includes(query);
-        const matchPhone = apt.phone.includes(query);
-        const matchDate = apt.date.toLowerCase().includes(query) || formatDateLabel(apt.date).toLowerCase().includes(query);
-        return matchName || matchPhone || matchDate;
+        const matchPhone = apt.phone && (apt.phone.includes(query) || (normQuery && apt.phone.includes(normQuery)));
+        const matchDate =
+          apt.date.toLowerCase().includes(query) ||
+          formatDateLabel(apt.date).toLowerCase().includes(query);
+        return Boolean(matchName || matchPhone || matchDate);
       }
 
       return true;
     });
-  }, [activeAppointments, adminFilter, statusFilter, searchQuery]);
+  }, [sortedAppointments, adminFilter, statusFilter, searchQuery]);
 
   const handleOpenWhatsAppReminder = (apt: Appointment) => {
     setSelectedWhatsAppApt(apt);
     setWhatsAppModalOpen(true);
   };
 
+  const handleOpenEditDialog = (apt: Appointment) => {
+    setSelectedEditApt(apt);
+    setEditDialogOpen(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 bg-[#2A2A2C] rounded-2xl w-48" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-28 bg-[#2A2A2C] rounded-[22px]" />
+            ))}
+          </div>
+          <div className="h-96 bg-[#2A2A2C] rounded-[22px]" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
+        <div className="p-8 rounded-[22px] bg-[#2A2A2C] border border-[#3A3A3C] text-center space-y-3">
+          <p className="text-base text-rose-400 font-semibold">Failed to load appointments</p>
+          <p className="text-xs text-[#B8B8BC] max-w-md mx-auto">{error}</p>
+          <Button size="sm" variant="outline" onClick={refetch} className="rounded-full mt-2">
+            Retry Connection
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
-      {/* 5a. Admin Header */}
+    <div className="w-full max-w-7xl mx-auto space-y-6 font-sans pb-24 md:pb-8">
+      {/* 1. Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-semibold text-[#F4694C] uppercase tracking-wider">
             Practice Management • Lead Nutritionist
           </span>
           <h1 className="font-serif text-3xl lg:text-4xl font-normal text-[#F5F2EC] mt-1">
-            Good morning, <em className="italic font-normal">Anika</em>
+            Good morning, <em className="italic font-normal">Dr. Kayro</em>
           </h1>
           <p className="text-sm text-[#B8B8BC] mt-1">
-            Wednesday, 28 Oct 2026 • {upcomingCount} consultations scheduled
+            {format(getNow(), "EEEE, d MMM yyyy")} • {upcomingCount} consultation{upcomingCount !== 1 ? "s" : ""} scheduled
           </p>
         </div>
 
@@ -165,66 +276,66 @@ export function AdminApp() {
           <Button
             onClick={() => setAddSheetOpen(true)}
             variant="coral"
-            className="rounded-full shadow-lg shadow-[#F4694C]/25 h-11 px-6 font-semibold"
+            className="rounded-full h-11 px-6 font-semibold"
           >
             <Plus className="w-4 h-4 mr-1.5" /> Add appointment
           </Button>
         </div>
       </div>
 
-      {/* 5a. Summary Strip (4 cards) */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 2. Summary Strip (4 cards: 2x2 grid on mobile, 4 cols on lg) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Today */}
-        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-5">
+        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-4 sm:p-5">
           <div className="flex items-center justify-between text-xs text-[#B8B8BC] mb-2 font-medium">
             <span>Today</span>
             <Calendar className="w-4 h-4 text-[#B8B8BC]" />
           </div>
-          <div className="text-3xl font-bold font-serif text-[#F5F2EC]">
+          <div className="text-2xl sm:text-3xl font-bold font-serif text-[#F5F2EC]">
             {todayCount}
           </div>
-          <span className="text-xs text-[#B8B8BC] mt-1 block">Scheduled sessions</span>
+          <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Scheduled sessions</span>
         </div>
 
         {/* Card 2: Upcoming */}
-        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-5">
+        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-4 sm:p-5">
           <div className="flex items-center justify-between text-xs text-[#B8B8BC] mb-2 font-medium">
             <span>Upcoming</span>
             <Clock className="w-4 h-4 text-sky-400" />
           </div>
-          <div className="text-3xl font-bold font-serif text-sky-300">
+          <div className="text-2xl sm:text-3xl font-bold font-serif text-sky-300">
             {upcomingCount}
           </div>
-          <span className="text-xs text-[#B8B8BC] mt-1 block">Booked sessions</span>
+          <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Booked sessions</span>
         </div>
 
         {/* Card 3: Needs Confirmation */}
-        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-5">
+        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-4 sm:p-5">
           <div className="flex items-center justify-between text-xs text-[#B8B8BC] mb-2 font-medium">
             <span>Needs confirmation</span>
             <AlertTriangle className="w-4 h-4 text-[#F59E0B]" />
           </div>
-          <div className="text-3xl font-bold font-serif text-[#F59E0B]">
+          <div className="text-2xl sm:text-3xl font-bold font-serif text-[#F59E0B]">
             {needsConfirmationCount}
           </div>
-          <span className="text-xs text-[#B8B8BC] mt-1 block">Pending replies</span>
+          <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Pending replies</span>
         </div>
 
         {/* Card 4: No-show Rate */}
-        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-5">
+        <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] p-4 sm:p-5">
           <div className="flex items-center justify-between text-xs text-[#B8B8BC] mb-2 font-medium">
             <span>No-show rate</span>
             <Users className="w-4 h-4 text-rose-400" />
           </div>
-          <div className="text-3xl font-bold font-serif text-rose-300">
+          <div className="text-2xl sm:text-3xl font-bold font-serif text-rose-300">
             {noShowRate}%
           </div>
-          <span className="text-xs text-[#B8B8BC] mt-1 block">Past sessions</span>
+          <span className="text-[11px] sm:text-xs text-[#B8B8BC] mt-1 block">Past sessions</span>
         </div>
       </div>
 
-      {/* 5a. Alert Banner (Left border-l-4 border-amber-500) */}
-      {unconfirmedNext24h && (
+      {/* 3. Alert Banner (Visible only when unconfirmed appointments in next 24h > 0) */}
+      {unconfirmedNext24hList.length > 0 && (
         <div className="bg-[#2A2A2C] border border-[#3A3A3C] border-l-4 border-l-[#F59E0B] rounded-r-[22px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
           <div className="flex items-start sm:items-center gap-3">
             <div className="p-2 rounded-xl bg-[#F59E0B]/20 text-[#F59E0B] shrink-0">
@@ -232,18 +343,18 @@ export function AdminApp() {
             </div>
             <div>
               <p className="text-sm font-semibold text-[#F5F2EC]">
-                1 appointment in the next 24 hours is unconfirmed.
+                {unconfirmedNext24hList.length} appointment{unconfirmedNext24hList.length !== 1 ? "s" : ""} in the next 24 hours {unconfirmedNext24hList.length === 1 ? "needs" : "need"} confirmation.
               </p>
               <p className="text-xs text-[#B8B8BC]">
-                {unconfirmedNext24h.clientName} ({formatDateLabel(unconfirmedNext24h.date)} at{" "}
-                {formatTimeLabel(unconfirmedNext24h.time)}) has not confirmed their attendance yet.
+                {unconfirmedNext24hList[0].clientName} ({formatDateLabel(unconfirmedNext24hList[0].date)} at{" "}
+                {formatTimeLabel(unconfirmedNext24hList[0].time)}) has not confirmed attendance yet.
               </p>
             </div>
           </div>
 
           <Button
             size="sm"
-            onClick={() => handleOpenWhatsAppReminder(unconfirmedNext24h)}
+            onClick={() => handleOpenWhatsAppReminder(unconfirmedNext24hList[0])}
             className="bg-[#F59E0B] hover:bg-[#c9952e] text-[#1C1C1E] font-semibold rounded-full px-5 h-9 shrink-0 gap-1.5"
           >
             <MessageSquare className="w-3.5 h-3.5" />
@@ -252,7 +363,7 @@ export function AdminApp() {
         </div>
       )}
 
-      {/* 5a. Appointments Table Container */}
+      {/* 4. Appointments Table / Cards Container */}
       <div className="bg-[#2A2A2C] border border-[#3A3A3C] rounded-[22px] overflow-hidden shadow-xl">
         {/* Toolbar */}
         <div className="p-4 sm:p-5 border-b border-[#3A3A3C] flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -262,12 +373,12 @@ export function AdminApp() {
               const active = adminFilter === filterVal;
               const count =
                 filterVal === "all"
-                  ? activeAppointments.length
+                  ? appointments.length
                   : filterVal === "today"
                   ? todayCount
                   : filterVal === "upcoming"
                   ? upcomingCount
-                  : pastAppointments.length;
+                  : pastCount;
 
               return (
                 <button
@@ -287,7 +398,7 @@ export function AdminApp() {
             })}
           </div>
 
-          {/* Search + Status Dropdown */}
+          {/* Search + Status Filter */}
           <div className="flex items-center gap-3">
             <div className="relative flex-1 sm:w-60">
               <Search className="w-4 h-4 text-[#B8B8BC] absolute left-3.5 top-3" />
@@ -295,7 +406,7 @@ export function AdminApp() {
                 placeholder="Search clients..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-10 text-xs bg-[#1C1C1E] rounded-full"
+                className="pl-10 h-10 text-xs bg-[#1C1C1E] border-[#3A3A3C] text-[#F5F2EC] rounded-full"
               />
             </div>
 
@@ -308,7 +419,7 @@ export function AdminApp() {
                 </span>
                 <ChevronDown className="w-3 h-3 text-[#B8B8BC]" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuContent align="end" className="w-40 bg-[#2A2A2C] border-[#3A3A3C] text-[#F5F2EC]">
                 <DropdownMenuItem onClick={() => setStatusFilter("all")}>
                   All statuses
                 </DropdownMenuItem>
@@ -321,12 +432,18 @@ export function AdminApp() {
                 <DropdownMenuItem onClick={() => setStatusFilter("No-show")}>
                   No-show
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("Cancelled")}>
+                  Cancelled
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setStatusFilter("Rescheduled")}>
+                  Rescheduled
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
 
-        {/* Desktop Table View */}
+        {/* Desktop Table View (>= md) */}
         <div className="hidden md:block overflow-x-auto">
           {filteredAppointments.length === 0 ? (
             <div className="py-16 text-center space-y-3">
@@ -345,7 +462,16 @@ export function AdminApp() {
                   ? "Take a moment to review upcoming patient dietary charts or catch up on lab protocols."
                   : "No consultations match your selected filter or search keyword."}
               </p>
-              {adminFilter !== "all" && (
+              {adminFilter === "today" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAdminFilter("upcoming")}
+                  className="rounded-full mt-2"
+                >
+                  See upcoming appointments
+                </Button>
+              ) : (
                 <Button
                   size="sm"
                   variant="outline"
@@ -377,6 +503,13 @@ export function AdminApp() {
                 {filteredAppointments.map((apt) => {
                   const isHighlighted = apt.clientName === "Riya Shah";
                   const hasPhone = Boolean(normalizePhone(apt.phone));
+                  const rescheduledFromApt = apt.rescheduledFrom
+                    ? appointments.find((a) => a.id === apt.rescheduledFrom)
+                    : null;
+                  const isUpcomingActiveBooked =
+                    apt.status === "Booked" &&
+                    apt.clientAction === "none" &&
+                    !isPastAppointment(apt);
 
                   return (
                     <tr
@@ -397,15 +530,30 @@ export function AdminApp() {
                               {apt.clientName}
                             </span>
                             <span className="text-[11px] text-[#B8B8BC] block">
-                              Clinical Nutrition
+                              45 min consultation
                             </span>
+                            {rescheduledFromApt && (
+                              <span className="text-[11px] text-[#B8B8BC] block">
+                                Rescheduled from {formatDateLabel(rescheduledFromApt.date, "EEE d MMM")} · {formatTimeLabel(rescheduledFromApt.time)}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
 
                       {/* Phone */}
-                      <td className="py-4 px-4 font-mono text-[#B8B8BC]">
-                        {hasPhone ? formatPhone(apt.phone) : <span className="text-[#B8B8BC]/50">—</span>}
+                      <td className="py-4 px-4 tabular-nums text-sm text-[#B8B8BC]">
+                        {hasPhone ? (
+                          formatPhone(apt.phone)
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditDialog(apt)}
+                            className="text-[#F59E0B] text-xs hover:underline cursor-pointer"
+                          >
+                            Add phone
+                          </button>
+                        )}
                       </td>
 
                       {/* Date */}
@@ -420,20 +568,32 @@ export function AdminApp() {
 
                       {/* Status Dropdown */}
                       <td className="py-4 px-4">
-                        <StatusDropdown
-                          status={apt.status}
-                          onStatusChange={(newStatus) =>
-                            updateAppointmentStatus(apt.id, newStatus)
-                          }
-                        />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <StatusDropdown
+                            status={apt.status}
+                            onStatusChange={(newStatus) =>
+                              updateAppointmentStatus(apt.id, newStatus)
+                            }
+                          />
+                          {apt.clientAction === "Rescheduled" && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[10px] font-semibold">
+                              Rescheduled
+                            </span>
+                          )}
+                          {apt.clientAction === "Cancelled" && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[10px] font-semibold">
+                              Cancelled
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Confirmation Badge */}
                       <td className="py-4 px-4">
-                        {apt.status === "Booked" ? (
+                        {isUpcomingActiveBooked ? (
                           <StatusBadge status={apt.confirmed} size="sm" />
                         ) : (
-                          <span className="text-[#B8B8BC] font-mono pl-2">—</span>
+                          <span className="text-[#B8B8BC] pl-2">—</span>
                         )}
                       </td>
 
@@ -455,7 +615,7 @@ export function AdminApp() {
                             <DropdownMenuTrigger className="p-1.5 rounded-full hover:bg-[#3A3A3C] text-[#B8B8BC] hover:text-[#F5F2EC] transition-colors focus:outline-none cursor-pointer">
                               <MoreVertical className="w-4 h-4" />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="bg-[#2A2A2C] border-[#3A3A3C] text-[#F5F2EC]">
                               {hasPhone && (
                                 <DropdownMenuItem
                                   onClick={() => handleOpenWhatsAppReminder(apt)}
@@ -465,6 +625,25 @@ export function AdminApp() {
                                   <span>WhatsApp Reminder</span>
                                 </DropdownMenuItem>
                               )}
+
+                              {isUpcomingActiveBooked && !apt.confirmed && (
+                                <DropdownMenuItem
+                                  onClick={() => confirmAppointment(apt.id)}
+                                  className="gap-2 text-xs"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-[#34D399]" />
+                                  <span>Mark as confirmed</span>
+                                </DropdownMenuItem>
+                              )}
+
+                              <DropdownMenuItem
+                                onClick={() => handleOpenEditDialog(apt)}
+                                className="gap-2 text-xs"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-[#B8B8BC]" />
+                                <span>Edit client</span>
+                              </DropdownMenuItem>
+
                               <DropdownMenuItem
                                 onClick={() =>
                                   updateAppointmentStatus(
@@ -479,12 +658,13 @@ export function AdminApp() {
                                   Mark as {apt.status === "Done" ? "Booked" : "Done"}
                                 </span>
                               </DropdownMenuItem>
+
                               <DropdownMenuItem
-                                onClick={() => cancelAppointment(apt.id)}
-                                className="gap-2 text-xs text-[#D64545] hover:text-[#D64545]"
+                                onClick={() => deleteAppointment(apt.id)}
+                                className="gap-2 text-xs text-[#D64545] hover:text-[#D64545] focus:text-[#D64545]"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
-                                <span>Cancel Appointment</span>
+                                <span>Delete</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -505,72 +685,154 @@ export function AdminApp() {
               No consultations match your filter.
             </div>
           ) : (
-            filteredAppointments.map((apt) => (
-              <div
-                key={apt.id}
-                className="p-4 rounded-2xl bg-[#1C1C1E] border border-[#3A3A3C] space-y-3"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full bg-[#3A3A3C] flex items-center justify-center text-[10px] font-bold text-[#F5F2EC]">
-                      {apt.clientName.split(" ").map((n) => n[0]).join("")}
-                    </div>
-                    <div>
-                      <span className="font-semibold text-xs text-[#F5F2EC] block">
-                        {apt.clientName}
-                      </span>
-                      <span className="text-[10px] text-[#B8B8BC] block">
-                        {formatPhone(apt.phone)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <StatusDropdown
-                      status={apt.status}
-                      onStatusChange={(newStatus) =>
-                        updateAppointmentStatus(apt.id, newStatus)
-                      }
-                    />
-                    {apt.status === "Booked" && (
-                      <StatusBadge status={apt.confirmed} size="xs" />
-                    )}
-                  </div>
-                </div>
+            filteredAppointments.map((apt) => {
+              const hasPhone = Boolean(normalizePhone(apt.phone));
+              const rescheduledFromApt = apt.rescheduledFrom
+                ? appointments.find((a) => a.id === apt.rescheduledFrom)
+                : null;
+              const isUpcomingActiveBooked =
+                apt.status === "Booked" &&
+                apt.clientAction === "none" &&
+                !isPastAppointment(apt);
 
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-[#3A3A3C]/40">
-                  <span className="text-[#F5F2EC] font-medium">
-                    {formatDateLabel(apt.date)} • {formatTimeLabel(apt.time)}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {normalizePhone(apt.phone) && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenWhatsAppReminder(apt)}
-                        className="p-1 rounded-full text-[#25D366]"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => cancelAppointment(apt.id)}
-                      className="p-1 rounded-full text-[#D64545]"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              return (
+                <div
+                  key={apt.id}
+                  className="p-4 rounded-2xl bg-[#1C1C1E] border border-[#3A3A3C] space-y-3"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-[#3A3A3C] flex items-center justify-center text-[10px] font-bold text-[#F5F2EC]">
+                        {apt.clientName.split(" ").map((n) => n[0]).join("")}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-xs text-[#F5F2EC] block">
+                          {apt.clientName}
+                        </span>
+                        <div className="text-[10px] text-[#B8B8BC]">
+                          {hasPhone ? (
+                            <span className="tabular-nums">{formatPhone(apt.phone)}</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditDialog(apt)}
+                              className="text-[#F59E0B] hover:underline"
+                            >
+                              Add phone
+                            </button>
+                          )}
+                        </div>
+                        {rescheduledFromApt && (
+                          <span className="text-[10px] text-[#B8B8BC] block">
+                            Rescheduled from {formatDateLabel(rescheduledFromApt.date, "EEE d MMM")} · {formatTimeLabel(rescheduledFromApt.time)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      <StatusDropdown
+                        status={apt.status}
+                        onStatusChange={(newStatus) =>
+                          updateAppointmentStatus(apt.id, newStatus)
+                        }
+                      />
+                      {apt.clientAction === "Rescheduled" && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[9px] font-semibold">
+                          Rescheduled
+                        </span>
+                      )}
+                      {apt.clientAction === "Cancelled" && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[9px] font-semibold">
+                          Cancelled
+                        </span>
+                      )}
+                      {isUpcomingActiveBooked && (
+                        <StatusBadge status={apt.confirmed} size="xs" />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-[#3A3A3C]/40">
+                    <span className="text-[#F5F2EC] font-medium">
+                      {formatDateLabel(apt.date)} • {formatTimeLabel(apt.time)}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {hasPhone && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenWhatsAppReminder(apt)}
+                          className="p-1 rounded-full text-[#25D366]"
+                        >
+                          <MessageSquare className="w-4 h-4" />
+                        </button>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="p-1 rounded-full text-[#B8B8BC]">
+                          <MoreVertical className="w-4 h-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-[#2A2A2C] border-[#3A3A3C] text-[#F5F2EC]">
+                          {isUpcomingActiveBooked && !apt.confirmed && (
+                            <DropdownMenuItem
+                              onClick={() => confirmAppointment(apt.id)}
+                              className="gap-2 text-xs"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#34D399]" />
+                              <span>Mark as confirmed</span>
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => handleOpenEditDialog(apt)}
+                            className="gap-2 text-xs"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-[#B8B8BC]" />
+                            <span>Edit client</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => deleteAppointment(apt.id)}
+                            className="gap-2 text-xs text-[#D64545]"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-[#3A3A3C] text-xs text-[#B8B8BC]">
+          Showing {filteredAppointments.length} appointment{filteredAppointments.length !== 1 ? "s" : ""}
         </div>
       </div>
 
-      {/* WhatsApp Reminder Modal (Dialog) */}
+      {/* Floating Action Button on Mobile */}
+      <div className="md:hidden fixed bottom-6 right-5 z-20">
+        <Button
+          onClick={() => setAddSheetOpen(true)}
+          variant="coral"
+          className="rounded-full w-13 h-13 shadow-xl flex items-center justify-center p-0"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+      </div>
+
+      {/* WhatsApp Reminder Modal */}
       <WhatsAppReminderDialog
         appointment={selectedWhatsAppApt}
         open={whatsAppModalOpen}
         onOpenChange={setWhatsAppModalOpen}
+      />
+
+      {/* Edit Appointment Dialog */}
+      <EditAppointmentDialog
+        appointment={selectedEditApt}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
       />
 
       {/* Add Appointment Sheet (Drawer) */}

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Appointment } from "@/lib/data";
+import { Appointment, getTomorrowStr, getTodayStr } from "@/lib/data";
 import {
   Dialog,
   DialogContent,
@@ -11,12 +11,11 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { CheckCheck, MessageSquare, Send } from "lucide-react";
+import { CheckCheck, MessageSquare } from "lucide-react";
 import {
   formatDateLabel,
   formatTimeLabel,
   formatPhone,
-  whatsappLink,
   normalizePhone,
 } from "@/lib/utils";
 
@@ -33,20 +32,26 @@ export function WhatsAppReminderDialog({
 }: WhatsAppReminderDialogProps) {
   if (!appointment) return null;
 
-  const clientFirstName = appointment.clientName.split(" ")[0] || "there";
-  const dateStr = formatDateLabel(appointment.date);
+  const clientFirstName = appointment.clientName.trim().split(" ")[0] || "there";
+  const isTomorrow = appointment.date === getTomorrowStr();
+  const isToday = appointment.date === getTodayStr();
+  const dateRef = isTomorrow
+    ? `tomorrow, ${formatDateLabel(appointment.date, "EEEE d MMM")}`
+    : isToday
+    ? `today, ${formatDateLabel(appointment.date, "EEEE d MMM")}`
+    : `on ${formatDateLabel(appointment.date, "EEEE d MMM")}`;
   const timeStr = formatTimeLabel(appointment.time);
-  const messageBody = `Hi ${clientFirstName}, your session with Dr. Anika is tomorrow, ${dateStr} at ${timeStr}. Reply YES to confirm or tell us if you need to reschedule.`;
+  const messageBody = `Hi ${clientFirstName}, your session with Dr. Kayro is ${dateRef} at ${timeStr}. Reply YES to confirm or tell us if you need to reschedule.`;
+
+  const phoneDigits = normalizePhone(appointment.phone);
+  const hasValidPhone = Boolean(phoneDigits && phoneDigits.length === 10);
 
   const handleOpenWhatsApp = () => {
-    const link = whatsappLink(appointment);
-    if (link && link !== "#") {
-      window.open(link, "_blank");
-    }
+    if (!hasValidPhone) return;
+    const url = `https://wa.me/91${phoneDigits}?text=${encodeURIComponent(messageBody)}`;
+    window.open(url, "_blank");
     onOpenChange(false);
   };
-
-  const hasValidPhone = Boolean(normalizePhone(appointment.phone));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -76,7 +81,7 @@ export function WhatsAppReminderDialog({
 
           <div>
             <span className="text-[#B8B8BC] block text-[11px]">Phone</span>
-            <span className="font-mono text-[#F5F2EC]">
+            <span className="tabular-nums text-[#F5F2EC]">
               {hasValidPhone ? `+91 ${formatPhone(appointment.phone)}` : "Missing"}
             </span>
           </div>
@@ -106,9 +111,14 @@ export function WhatsAppReminderDialog({
               </div>
             </div>
           </div>
+          {!hasValidPhone && (
+            <p className="text-[11px] text-amber-400">
+              Add a phone number first to send WhatsApp reminders.
+            </p>
+          )}
         </div>
 
-        <DialogFooter className="mt-2">
+        <DialogFooter className="mt-2 gap-2 sm:gap-0">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -119,10 +129,11 @@ export function WhatsAppReminderDialog({
           <Button
             onClick={handleOpenWhatsApp}
             disabled={!hasValidPhone}
-            variant="coral"
-            className="rounded-full text-xs gap-1.5 shadow-lg shadow-[#F4694C]/25 disabled:opacity-40"
+            variant="outline"
+            className="rounded-full text-xs gap-2 border-[#3A3A3C] text-[#F5F2EC] hover:bg-[#3A3A3C] disabled:opacity-40"
           >
-            <Send className="w-3.5 h-3.5" /> Open WhatsApp
+            <MessageSquare className="w-3.5 h-3.5 text-[#25D366]" />
+            Open WhatsApp
           </Button>
         </DialogFooter>
       </DialogContent>

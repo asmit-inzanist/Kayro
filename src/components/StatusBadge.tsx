@@ -123,7 +123,20 @@ export function StatusBadge({
     );
   }
 
-  if (norm === "missed" || norm === "no-show" || norm === "noshow") {
+  if (norm === "awaiting update" || norm === "awaiting_update") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center px-2 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[10px] font-semibold",
+          className
+        )}
+      >
+        Awaiting update
+      </span>
+    );
+  }
+
+  if (norm === "no-show" || norm === "noshow") {
     return (
       <span
         className={cn(
@@ -131,7 +144,20 @@ export function StatusBadge({
           className
         )}
       >
-        {norm.includes("missed") ? "Missed" : "No-show"}
+        No-show
+      </span>
+    );
+  }
+
+  if (norm === "missed") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center px-2 py-0.5 rounded-full bg-[#F87171]/15 border border-[#F87171]/30 text-[#F87171] text-[10px] font-semibold",
+          className
+        )}
+      >
+        Missed
       </span>
     );
   }
@@ -140,7 +166,7 @@ export function StatusBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center px-2 py-0.5 rounded-full bg-[#F87171]/15 border border-[#F87171]/30 text-[#F87171] text-[10px] font-semibold",
+          "inline-flex items-center px-2 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[10px] font-semibold",
           className
         )}
       >
@@ -153,7 +179,7 @@ export function StatusBadge({
     return (
       <span
         className={cn(
-          "inline-flex items-center px-2 py-0.5 rounded-full bg-[#F59E0B]/15 border border-[#F59E0B]/30 text-[#F59E0B] text-[10px] font-semibold",
+          "inline-flex items-center px-2 py-0.5 rounded-full bg-transparent border border-[#3A3A3C] text-[#B8B8BC] text-[10px] font-semibold",
           className
         )}
       >

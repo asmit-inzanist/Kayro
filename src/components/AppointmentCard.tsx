@@ -63,7 +63,7 @@ export function AppointmentCard({
       <h4 className="font-serif text-lg font-medium text-[#F5F2EC] mb-1 group-hover:text-[#F4694C] transition-colors">
         Clinical Nutrition Consultation
       </h4>
-      <p className="text-xs text-[#B8B8BC] mb-4">With Dr. Anika Mehta</p>
+      <p className="text-xs text-[#B8B8BC] mb-4">With Dr. Kayro</p>
 
       {/* Date & Time pills */}
       <div className="flex flex-wrap items-center gap-3 py-2 px-3 rounded-xl bg-[#1C1C1E] border border-[#3A3A3C]/60 text-xs text-[#F5F2EC] mb-4">
