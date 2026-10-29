@@ -7,11 +7,11 @@ interface SunMascotProps {
   size?: number;
 }
 
-export function SunMascot({ className = "", size = 120 }: SunMascotProps) {
+export function SunMascot({ className = "", size }: SunMascotProps) {
   return (
     <div
       className={`inline-block relative select-none ${className}`}
-      style={{ width: size, height: size }}
+      style={size ? { width: size, height: size } : undefined}
       aria-label="Nourish Sun Mascot"
     >
       <svg

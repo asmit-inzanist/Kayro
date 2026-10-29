@@ -219,7 +219,7 @@ export function ClientHome() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:items-stretch">
         {/* Left Column: Hero Green Card (8 cols) */}
         <div className="lg:col-span-8 flex flex-col">
-          <div className="bg-[#365744] rounded-[26px] p-7 sm:p-8 relative overflow-hidden text-white shadow-xl flex-1 flex flex-col justify-between">
+          <div className="bg-[#365744] rounded-[26px] p-5 sm:p-8 relative overflow-hidden text-white shadow-xl flex-1 flex flex-col justify-between">
             {nextSession ? (
               <>
                 {/* Top Content */}
@@ -266,14 +266,14 @@ export function ClientHome() {
                 </div>
 
                 {/* Bottom Row: Actions + Sun Mascot */}
-                <div className="mt-14 sm:mt-16 flex items-end justify-between relative">
+                <div className="mt-8 sm:mt-16 flex items-end justify-between relative">
                   {/* Two CTA Buttons */}
-                  <div className="flex items-center gap-3 z-10">
+                  <div className="flex items-center gap-2 sm:gap-3 z-10 flex-wrap sm:flex-nowrap">
                     <button
                       type="button"
                       onClick={handleConfirmNextSession}
                       disabled={isConfirming}
-                      className="bg-[#F4694C] hover:bg-[#E05538] text-white text-xs sm:text-sm font-semibold px-6 py-3 rounded-full transition-colors shadow-sm cursor-pointer disabled:opacity-60"
+                      className="bg-[#F4694C] hover:bg-[#E05538] text-white text-xs sm:text-sm font-semibold px-4 sm:px-6 py-2.5 sm:py-3 rounded-full transition-colors shadow-sm cursor-pointer disabled:opacity-60 shrink-0"
                     >
                       {nextSession.confirmed ? "Confirmed ✓" : isConfirming ? "Confirming..." : "Yes, I'll be there"}
                     </button>
@@ -281,15 +281,15 @@ export function ClientHome() {
                     <button
                       type="button"
                       onClick={() => handleReschedule(nextSession.id)}
-                      className="bg-[#F5F2EC] hover:bg-white text-[#1C1C1E] text-xs sm:text-sm font-semibold px-6 py-3 rounded-full transition-colors cursor-pointer"
+                      className="bg-[#F5F2EC] hover:bg-white text-[#1C1C1E] text-xs sm:text-sm font-semibold px-4 sm:px-6 py-2.5 sm:py-3 rounded-full transition-colors cursor-pointer shrink-0"
                     >
                       Reschedule
                     </button>
                   </div>
 
-                  {/* Sun Mascot */}
+                  {/* Sun Mascot - dynamically scales with screen width */}
                   <div className="absolute -bottom-2 right-0 sm:right-4 pointer-events-none transform translate-y-1">
-                    <SunMascot size={115} />
+                    <SunMascot className="w-[68px] h-[68px] sm:w-[92px] sm:h-[92px] md:w-[115px] md:h-[115px]" />
                   </div>
                 </div>
               </>
